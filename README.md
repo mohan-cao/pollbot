@@ -1,18 +1,18 @@
-<img src="https://avatars2.githubusercontent.com/u/2810941?v=3&s=96" alt="Google Cloud Platform logo" title="Google Cloud Platform" align="right" height="96" width="96"/>
+<img src="https://avatars2.githubusercontent.com/u/2810941?v=3&s=96" alt="" title="Google Cloud Platform" align="right" height="96" width="96"/>
 
-# Google Cloud Functions - Slack Slash Command sample
+# Stupidly Simple Slack Polling app for Cheap
 
 See:
 
-* [Cloud Functions Slack tutorial][tutorial]
-* [Cloud Functions Slack sample source code][code]
+* [Adapted from the Google Cloud Functions Slack tutorial][tutorial]
+* [The main project source code][code]
 
 [tutorial]: https://cloud.google.com/functions/docs/tutorials/slack
 [code]: index.js
 
-## Deploy and run the sample
+## Deploy and run the stupid thing
 
-See the [Cloud Functions Slack tutorial][tutorial].
+See the [Cloud Functions Slack tutorial][tutorial]. Most of it is the same except I don't use KG search.
 
 ## Run the tests
 
@@ -20,8 +20,18 @@ See the [Cloud Functions Slack tutorial][tutorial].
 
 1. Install dependencies:
 
-        npm install
+        yarn
 
 1. Run the tests:
 
-        npm test
+        yarn test
+
+1. Deploy the fucking thing
+
+        yarn deploy
+
+1. Undeploy the fucking thing
+
+        yarn undeploy
+
+<small>holy shit is that a mf jojo refrence</small>
