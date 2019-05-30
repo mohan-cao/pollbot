@@ -25,8 +25,15 @@ const emojis = [
  * @returns {object} The formatted message.
  */
 function formatSlackMessage(question, options) {
+  if (!question) {
+    return { response_type: "ephemeral", text: "Uh, did you follow the command hints? You need a question first.." };
+  }
+  if (options.length < 2) {
+    return { response_type: "ephemeral", text: "Hey, you don't have enough options to make a poll!" };
+  }
+
   return {
-    text: `*${question}*\nOptions:\n${options.slice(1, 11).map((x, i) => `>${emojis[i]} ${x}`).join("\n")}`,
+    text: `*${question}*\nOptions:\n${options.slice(0, 10).map((x, i) => `>${emojis[i]} ${x}`).join("\n")}`,
     response_type: "in_channel"
   };
 }
@@ -53,9 +60,6 @@ function verifyWebhook(body) {
 function makePoll(bodyText) {
   let cleanedBodyText = bodyText.replace(/“|”/g, "\"");
   let params = cleanedBodyText.match(/("[^"]+"|[^\s"]+)/g).map(x => x.replace(/"/g, "")).filter(x => x.length > 0);
-  if (params.length < 3) {
-    cb(null, { text: "Hey, you don't have enough options to make a poll!" });
-  }
 
   return formatSlackMessage(params[0], params.slice(1));
 }
