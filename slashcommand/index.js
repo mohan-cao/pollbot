@@ -34,6 +34,36 @@ function formatSlackMessage(question, options) {
 
   return {
     text: `*${question}*\nOptions:\n${options.slice(0, 10).map((x, i) => `>${emojis[i]} ${x}`).join("\n")}`,
+    blocks: [
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": `*${question}*\nOptions:\n${options.slice(0, 10).map((x, i) => `>${emojis[i]} ${x}`).join("\n")}`
+        }
+      },
+      {
+        "type": "actions",
+        "elements": [
+          {
+            "type": "button",
+            "text": {
+              "type": "plain_text",
+              "text": "Approve",
+              "emoji": true
+            }
+          },
+          {
+            "type": "button",
+            "text": {
+              "type": "plain_text",
+              "text": "Reject",
+              "emoji": true
+            }
+          }
+        ]
+      }
+    ],
     response_type: "in_channel"
   };
 }
