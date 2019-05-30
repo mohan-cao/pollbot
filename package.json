@@ -1,0 +1,24 @@
+{
+  "name": "pollbot",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=8.13.0"
+  },
+  "scripts": {
+    "test": "mocha test/*.test.js --timeout=20000"
+  },
+  "dependencies": {
+    "googleapis": "^40.0.0"
+  },
+  "devDependencies": {
+    "@google-cloud/nodejs-repo-tools": "^3.3.0",
+    "mocha": "^6.1.4",
+    "proxyquire": "^2.1.0",
+    "sinon": "^7.3.2"
+  },
+  "cloud-repo-tools": {
+    "requiresKeyFile": true,
+    "requiresProjectId": true
+  }
+}
