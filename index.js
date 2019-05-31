@@ -1,7 +1,10 @@
 const fetch = require("node-fetch");
 const env_yaml = require('env-yaml');
+const logger = require('./log.js')(process.env.NODE_ENV, console)
 
-if (process.env.NODE_ENV === "development") env_yaml.config();
+if (process.env.NODE_ENV === "development") {
+  env_yaml.config();
+}
 
 const config = {
   SLACK_TOKEN: process.env.SLACK_TOKEN,
@@ -117,7 +120,7 @@ async function sendMessage(channel, username, pollText) {
       username: username,
     })
   })).json();
-  console.debug("Sent message with timestamp ", json_resp.ts, " and channel id ", json_resp.channel);
+  logger.debug("Sent message with timestamp ", json_resp.ts, " and channel id ", json_resp.channel);
   return json_resp;
 }
 
@@ -146,7 +149,7 @@ async function sendEmojis(channel, ts, reactions) {
       })
     })).json())["ok"]
   }
-  console.debug("Sent ", reactions, " emojis to message timestamp ", ts)
+  logger.debug("Sent ", reactions, " emojis to message timestamp ", ts)
   return success;
 }
 
@@ -187,7 +190,7 @@ exports.pollbot = async function(req, res) {
     res.json({ text: "Successfully made the poll!" });
   }
   catch (err) {
-    console.error(err);
+    logger.error(JSON.stringify(err));
     res.status(err.status || 500).json(err);
   }
 }
