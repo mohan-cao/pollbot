@@ -1,7 +1,6 @@
 'use strict';
 
 const config = require('./config.json');
-const {google} = require('googleapis');
 
 const emojis = [
   "1️⃣",
@@ -16,6 +15,18 @@ const emojis = [
   "🔟",
 ];
 
+const emojisText = [
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "keycap_ten",
+];
 
 /**
  * Format slack message to look like a real fucking poll
@@ -44,24 +55,17 @@ function formatSlackMessage(question, options) {
       },
       {
         "type": "actions",
-        "elements": [
-          {
+        "elements": options.slice(0, 10).map((x, i) => {
+          return {
             "type": "button",
             "text": {
               "type": "plain_text",
-              "text": "Approve",
+              "text": `:${emojisText[i]}:`,
               "emoji": true
-            }
-          },
-          {
-            "type": "button",
-            "text": {
-              "type": "plain_text",
-              "text": "Reject",
-              "emoji": true
-            }
-          }
-        ]
+            },
+            "value": ""+i
+          };
+        })
       }
     ],
     response_type: "in_channel"

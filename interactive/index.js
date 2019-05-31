@@ -5,31 +5,47 @@ const {google} = require('googleapis');
 const fetch = require('node-fetch');
 
 const emojis = [
-  "1️⃣",
-  "2️⃣",
-  "3️⃣",
-  "4️⃣",
-  "5️⃣",
-  "6️⃣",
-  "7️⃣",
-  "8️⃣",
-  "9️⃣",
-  "🔟",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "keycap_ten",
 ];
 
 class Message {
   constructor() {
-    this.type = null;
-    this.user = null;
-    this.ts = null;
-    this.text = null;
+    this.type = "";
+    this.user = "";
+    this.ts = NaN;
+    this.text = "";
   }
 }
 
 class Channel {
   constructor() {
-    this.id = null;
-    this.name = null;
+    this.id = "";
+    this.name = "";
+  }
+}
+
+class User {
+  constructor() {
+    this.id = "";
+  }
+}
+
+class SlackRequest {
+  constructor() {
+    this.token = "";
+    this.user = new User();
+    this.message = new Message();
+    this.channel = new Channel();
+    this.actions = [];
   }
 }
 
@@ -50,25 +66,62 @@ function verifyWebhook(body) {
     throw error;
   }
 }
-
+/**
+ * Parses payload into a slack request
+ * @param {string} payload the payload to parse
+ * @returns {SlackRequest}
+ */
 function parsePayload(payload) {
   return JSON.parse(payload);
+}
+
+/**
+ * Sends a reaction to the designated slack message
+ * 
+ * @param {string} token oauth token with scopes user/bot
+ * @param {string} emoji emoji string (without the surrounding ":")
+ * @param {string} channelId channel id
+ * @param {string} msgTimestamp message timestamp
+ * @param {string} userId user id to act on behalf of
+ */
+function sendReaction(token, emoji, channelId, msgTimestamp, userId) {
+  return fetch("https://slack.com/api/reactions.add", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "X-Slack-User": userId,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8'
+    },
+    body: JSON.stringify({
+      "name": emoji,
+      "channel": channelId,
+      "timestamp": msgTimestamp,
+    })
+  });
+}
+
+/**
+ * Gets emoji choice from actions
+ * @param {array} actions
+ * @returns {null | string}
+ */
+function getEmojiFromActions(actions) {
+  if (actions.length < 1) return null;
+  const i = parseInt(actions[0].value);
+  if (i < 0 || i > emojis.length - 1) return null;
+  return emojis[i];
 }
 
 /**
  * Receive a interactive request from Slack
  *
  * Trigger this function by making a POST request with a payload to:
- * https://[YOUR_REGION].[YOUR_PROJECT_ID].cloudfunctions.net/kgsearch
+ * https://[YOUR_REGION].[YOUR_PROJECT_ID].cloudfunctions.net/interactive
  *
  * @param {object} req Cloud Function request object.
  * @param {object} req.body The request payload.
  * @param {string} req.body.payload The request payload
- * @param {string} req.body.token Slack's verification token.
- * @param {string} req.body.callback_id The callback id to determine the type of interactive request
- * @param {string} req.body.type callback type
- * @param {Channel} req.body.channel The originating message channel
- * @param {Message} req.body.message The originating message timestamp
  * @param {object} res Cloud Function response object.
  */
 exports.interactive = (req, res) => {
@@ -80,25 +133,20 @@ exports.interactive = (req, res) => {
         throw error;
       }
 
-      const slack_response = parsePayload(req.body.payload);
+      const slackRequest = parsePayload(req.body.payload);
 
       // Verify that this request came from Slack
-      verifyWebhook(slack_response);
+      verifyWebhook(slackRequest);
 
-      return fetch("https://slack.com/api/reactions.add", {
-        method: "POST",
-        body: {
-          "token": config.SLACK_OAUTH_TOKEN,
-          "name": "thumbsup",
-          "channel": slack_response.channel.id,
-          "timestamp": slack_response.message.ts,
-        }
-      });
+      const emojiIndex = getEmojiFromActions(slackRequest.actions);
+
+      return sendReaction(config.SLACK_OAUTH_TOKEN, emojiIndex, slackRequest.channel.id, slackRequest.message.ts, slackRequest.user.id);
     })
     .then(x => x.json())
     .then(x => {
-      console.log(JSON.stringify(x));
-      res.status(200).send('');
+      console.debug(JSON.stringify(x));
+      res.status(200).send('')
+      return Promise.resolve();
     })
     .catch(err => {
       console.error(err);
