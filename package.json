@@ -11,7 +11,8 @@
     "undeploy": "gcloud functions delete pollbot"
   },
   "dependencies": {
-    "googleapis": "^40.0.0"
+    "googleapis": "^40.0.0",
+    "node-fetch": "^2.6.0"
   },
   "devDependencies": {
     "@google-cloud/nodejs-repo-tools": "^3.3.0",
