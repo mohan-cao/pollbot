@@ -1,35 +1,38 @@
-'use strict';
-
-const config = require('./config.json');
-const {google} = require('googleapis');
 const fetch = require("node-fetch");
+const env_yaml = require('env-yaml');
+
+if (process.env.NODE_ENV === "development") env_yaml.config();
+
+const config = {
+  SLACK_TOKEN: process.env.SLACK_TOKEN,
+  SLACK_OAUTH_TOKEN: process.env.SLACK_OAUTH_TOKEN
+};
 
 const emojis = [
-  "1️⃣",
-  "2️⃣",
-  "3️⃣",
-  "4️⃣",
-  "5️⃣",
-  "6️⃣",
-  "7️⃣",
-  "8️⃣",
-  "9️⃣",
-  "🔟",
+  ["1️⃣", "one"],
+  ["2️⃣", "two"],
+  ["3️⃣", "three"],
+  ["4️⃣", "four"],
+  ["5️⃣", "five"],
+  ["6️⃣", "six"],
+  ["7️⃣", "seven"],
+  ["8️⃣", "eight"],
+  ["9️⃣", "nine"],
+  ["🔟", "keycap_ten"],
 ];
 
-const emojiText = [
-  "one",
-  "two",
-  "three",
-  "four",
-  "five",
-  "six",
-  "seven",
-  "eight",
-  "nine",
-  "keycap_ten",
-];
+class HTTPError extends Error {
+  constructor(code, message) {
+    super();
+    this.status = code;
+    this.text = message;
+  }
+  toString() {
+    return JSON.stringify(this);
+  }
+}
 
+class ParameterError extends HTTPError {}
 
 /**
  * Verify that the webhook request came from Slack.
@@ -39,23 +42,38 @@ const emojiText = [
  */
 function verifyWebhook(body) {
   if (!body || body.token !== config.SLACK_TOKEN) {
-    const error = new Error('Invalid credentials');
-    error.code = 401;
-    throw error;
+    throw new HTTPError(401, (body && body.token ? "Invalid token" : "Missing token"));
   }
 }
 
 /**
- * Makes a message poll
+ * Gets command params from request body text
+ * Supports a maximum of 10 options
+ * MATCHES SIMPLEPOLL NOW
  * 
  * @param {string} bodyText request body text
- * @returns {{text: string, num_reactions: number}}
+ * @returns {string} cleaned params
  */
-function makePoll(bodyText) {
-  let cleanedBodyText = bodyText.replace(/“|”/g, "\"");
-  let params = cleanedBodyText.match(/("[^"]+"|[^\s"]+)/g).map(x => x.replace(/"/g, "")).filter(x => x.length > 0);
+function getPromptAndOptionsFromBody(bodyText) {
+  const cleanedBodyText = bodyText.replace(/“|”/g, "\"");
+  let params = cleanedBodyText.match(/"[^"\\]*(?:\\.[^"\\]*)*"|\S+/g);
+  if (params) {
+    return params
+      .filter(x => x !== "\"") // Eliminate strings with just " in it
+      .reduce((x, y) => {
+        // Join the resulting string back together again and RESPECT balanced quotes
+        const newElementIsQuoted = y.startsWith("\"") && y.endsWith("\"");
+        const reducerIsEmpty = x.length === 0;
+        const lastElementIsQuoted = !reducerIsEmpty && x[x.length-1].endsWith("\"") && x[x.length-1].startsWith("\"");
 
-  return makeSlackMessageJSON(params[0], params.slice(1));
+        if (newElementIsQuoted || reducerIsEmpty || lastElementIsQuoted) x.push(y)
+        else x[x.length-1] += " " + y;
+        return x;
+      }, [])
+      .map(x => x.replace(/(?<!\\)"/g,"").replace(/\\"/g, "\"")) // Negative lookbehind of unescaped quotes and replacing escaped quotes with unescaped quotes
+      .slice(0, 11);
+  }
+  return []
 }
 
 /**
@@ -63,20 +81,17 @@ function makePoll(bodyText) {
  *
  * @param {string} question the poll question
  * @param {array} options poll options
- * @returns {{ text: string, num_reactions: number }}
+ * @returns {string}
  */
-function makeSlackMessageJSON(question, options) {
+function formatSlackMessage(question, options) {
   if (!question) {
-    return { response_type: "ephemeral", text: "Uh, did you follow the command hints? You need a question first.." };
+    throw new ParameterError(200, "Uh, did you follow the command hints? You need a question first..");
   }
   if (options.length < 2) {
-    return { response_type: "ephemeral", text: "Hey, you don't have enough options to make a poll!" };
+    throw new ParameterError(200, "Hey, you don't have enough options to make a poll!");
   }
 
-  return {
-    text: `*${question}*\nOptions:\n${options.slice(0, 10).map((x, i) => `>${emojis[i]} ${x}`).join("\n")}`,
-    num_reactions: options.slice(0, 10).length
-  };
+  return `*${question}*\nOptions:\n${options.map((x, i) => `>${emojis[i][0]} ${x}`).join("\n")}`;
 }
 
 /**
@@ -102,7 +117,7 @@ async function sendMessage(channel, username, pollText) {
       username: username,
     })
   })).json();
-  console.log("Sent message with timestamp ", json_resp.ts, " and channel id ", json_resp.channel);
+  console.debug("Sent message with timestamp ", json_resp.ts, " and channel id ", json_resp.channel);
   return json_resp;
 }
 
@@ -115,7 +130,6 @@ async function sendMessage(channel, username, pollText) {
  * @returns {boolean} success
  */
 async function sendEmojis(channel, ts, reactions) {
-  console.debug("Sending ", (reactions+1), " emojis to message timestamp ", ts)
   let success = true
   for(let i = 0; i < reactions; i++) {
     success &= (await (await fetch("https://slack.com/api/reactions.add", {
@@ -126,12 +140,13 @@ async function sendEmojis(channel, ts, reactions) {
         'Content-Type': 'application/json; charset=utf-8'
       },
       body: JSON.stringify({
-        name: emojiText[i],
+        name: emojis[i][1],
         channel: channel,
         timestamp: ts
       })
     })).json())["ok"]
   }
+  console.debug("Sent ", reactions, " emojis to message timestamp ", ts)
   return success;
 }
 
@@ -149,35 +164,30 @@ async function sendEmojis(channel, ts, reactions) {
  * @param {string} req.body.text The user's request params
  * @param {object} res Cloud Function response object.
  */
-exports.pollbot = (req, res) => {
-  return Promise.resolve()
-    .then(() => {
-      if (req.method !== 'POST') {
-        const error = new Error('Only POST requests are accepted');
-        error.code = 405;
-        throw error;
-      }
-      return Promise.resolve();
-    })
-    .then(() => {
-      // Verify that this request came from Slack
-      verifyWebhook(req.body);
-      return Promise.resolve();
-    })
-    .then(() => {
-      // Send slack message and react to it
-      const pollJSON = makePoll(req.body.text);
-      return sendMessage(req.body.channel_id, req.body.user_name, pollJSON.text)
-        .then(x => { sendEmojis(x.channel, x.ts, pollJSON.num_reactions); return x; });
-    })
-    .then(() => {
-      // Send response
-      res.json({ text: "Successfully made the poll!" });
-      return Promise.resolve();
-    })
-    .catch(err => {
-      console.error(err);
-      res.status(err.code || 500).send(err);
-      return Promise.reject(err);
-    });
-};
+exports.pollbot = async function(req, res) {
+  try {
+    // Accept POST only
+    if (req.method !== 'POST') {
+      throw new HTTPError(405, 'Only POST requests are accepted');
+    }
+
+    // Verify that this request came from Slack
+    verifyWebhook(req.body);
+
+    // Parse prompt and options from body text
+    const params = getPromptAndOptionsFromBody(req.body.text);
+    const [prompt, ...options] = params;
+
+    // Send slack message and react to it
+    const pollText = formatSlackMessage(prompt, options);
+    const x = await sendMessage(req.body.channel_id, req.body.user_name, pollText);
+    sendEmojis(x.channel, x.ts, options.length);
+
+    // Send response
+    res.json({ text: "Successfully made the poll!" });
+  }
+  catch (err) {
+    console.error(err);
+    res.status(err.status || 500).json(err);
+  }
+}
