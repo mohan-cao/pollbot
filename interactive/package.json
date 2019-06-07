@@ -1,0 +1,31 @@
+{
+  "name": "pollbot-interactive",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=8.13.0"
+  },
+  "scripts": {
+    "start": "cross-env NODE_ENV=development functions-framework --target pollbot",
+    "test": "mocha test/*.test.js --timeout=20000",
+    "deploy": "gcloud functions deploy interactive --runtime nodejs10 --trigger-http --env-vars-file ../.env.yml",
+    "undeploy": "gcloud functions delete interactive"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^1.1.0",
+    "cross-env": "^5.2.0",
+    "env-yaml": "^0.1.2",
+    "googleapis": "^40.0.0",
+    "node-fetch": "^2.6.0"
+  },
+  "devDependencies": {
+    "@google-cloud/nodejs-repo-tools": "^3.3.0",
+    "mocha": "^6.1.4",
+    "proxyquire": "^2.1.0",
+    "sinon": "^7.3.2"
+  },
+  "cloud-repo-tools": {
+    "requiresKeyFile": true,
+    "requiresProjectId": true
+  }
+}
