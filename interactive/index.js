@@ -5,7 +5,7 @@ const logger = require('./log.js')(process.env.NODE_ENV, console)
 import { SlackRequest } from './SlackClasses';
 
 if (process.env.NODE_ENV === "development") {
-  env_yaml.config();
+  env_yaml.config({ path: '../.env.yml' });
 }
 
 const config = {

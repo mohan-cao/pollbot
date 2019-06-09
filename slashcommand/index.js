@@ -3,7 +3,7 @@ const env_yaml = require('env-yaml');
 const logger = require('./log.js')(process.env.NODE_ENV, console)
 
 if (process.env.NODE_ENV === "development") {
-  env_yaml.config();
+  env_yaml.config({ path: '../.env.yml' });
 }
 
 const config = {

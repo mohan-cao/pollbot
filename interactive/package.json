@@ -6,7 +6,7 @@
     "node": ">=8.13.0"
   },
   "scripts": {
-    "start": "cross-env NODE_ENV=development functions-framework --target pollbot",
+    "start": "cross-env NODE_ENV=development functions-framework --target interactive",
     "test": "mocha test/*.test.js --timeout=20000",
     "deploy": "gcloud functions deploy interactive --runtime nodejs10 --trigger-http --env-vars-file ../.env.yml",
     "undeploy": "gcloud functions delete interactive"
