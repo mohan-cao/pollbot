@@ -26,6 +26,10 @@ See the [Cloud Functions Slack tutorial][tutorial]. Most of it is the same excep
 
         yarn test
 
+1. Start the damn thing
+
+        yarn start
+
 1. Deploy the fucking thing
 
         yarn deploy
