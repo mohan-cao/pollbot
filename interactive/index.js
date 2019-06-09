@@ -2,7 +2,9 @@ const fetch = require("node-fetch");
 const env_yaml = require('env-yaml');
 const logger = require('./log.js')(process.env.NODE_ENV, console)
 
-import { SlackRequest } from './SlackClasses';
+const SlackRequest = require("./SlackClasses").SlackRequest;
+const Action = require("./SlackClasses").Action;
+const Button = require("./SlackClasses").Button;
 
 if (process.env.NODE_ENV === "development") {
   env_yaml.config({ path: '../.env.yml' });
@@ -12,19 +14,6 @@ const config = {
   SLACK_TOKEN: process.env.SLACK_TOKEN,
   SLACK_OAUTH_TOKEN: process.env.SLACK_OAUTH_TOKEN
 };
-
-const emojis = [
-  ["1️⃣", "one"],
-  ["2️⃣", "two"],
-  ["3️⃣", "three"],
-  ["4️⃣", "four"],
-  ["5️⃣", "five"],
-  ["6️⃣", "six"],
-  ["7️⃣", "seven"],
-  ["8️⃣", "eight"],
-  ["9️⃣", "nine"],
-  ["🔟", "keycap_ten"],
-];
 
 class HTTPError extends Error {
   constructor(code, message) {
@@ -52,63 +41,14 @@ function verifyWebhook(body) {
 }
 
 /**
- * Gets command params from request body text
- * Supports a maximum of 10 options
- * MATCHES SIMPLEPOLL NOW
- * 
- * @param {string} bodyText request body text
- * @returns {string} cleaned params
- */
-function getPromptAndOptionsFromBody(bodyText) {
-  const cleanedBodyText = bodyText.replace(/“|”/g, "\"");
-  let params = cleanedBodyText.match(/"[^"\\]*(?:\\.[^"\\]*)*"|\S+/g);
-  if (params) {
-    return params
-      .filter(x => x !== "\"") // Eliminate strings with just " in it
-      .reduce((x, y) => {
-        // Join the resulting string back together again and RESPECT balanced quotes
-        const newElementIsQuoted = y.startsWith("\"") && y.endsWith("\"");
-        const reducerIsEmpty = x.length === 0;
-        const lastElementIsQuoted = !reducerIsEmpty && x[x.length-1].endsWith("\"") && x[x.length-1].startsWith("\"");
-
-        if (newElementIsQuoted || reducerIsEmpty || lastElementIsQuoted) x.push(y)
-        else x[x.length-1] += " " + y;
-        return x;
-      }, [])
-      .map(x => x.replace(/(?<!\\)"/g,"").replace(/\\"/g, "\"")) // Negative lookbehind of unescaped quotes and replacing escaped quotes with unescaped quotes
-      .slice(0, 11);
-  }
-  return []
-}
-
-/**
- * Format slack message to look like a real fucking poll
- *
- * @param {string} question the poll question
- * @param {array} options poll options
- * @returns {string}
- */
-function formatSlackMessage(question, options) {
-  if (!question) {
-    throw new ParameterError(200, "Uh, did you follow the command hints? You need a question first..");
-  }
-  if (options.length < 2) {
-    throw new ParameterError(200, "Hey, you don't have enough options to make a poll!");
-  }
-
-  return `*${question}*\nOptions:\n${options.map((x, i) => `>${emojis[i][0]} ${x}`).join("\n")}`;
-}
-
-/**
- * Sends message to slack
+ * Deletes poll in channel
  * 
  * @param {string} channel channel id
- * @param {string} username username
- * @param {string} pollText poll text
- * @returns {Promise<{ ts: number, channel: string }>} response
+ * @param {number} ts timestamp of message
+ * @returns {boolean} success
  */
-async function sendMessage(channel, username, pollText) {
-  const json_resp = await (await fetch("https://slack.com/api/chat.postMessage", {
+async function deletePoll(channel, ts) {
+  let json = (await (await fetch("https://slack.com/api/chat.delete", {
     method: "POST",
     headers: {
       'Authorization': `Bearer ${config.SLACK_OAUTH_TOKEN}`,
@@ -117,42 +57,31 @@ async function sendMessage(channel, username, pollText) {
     },
     body: JSON.stringify({
       channel: channel,
-      text: pollText,
-      as_user: false,
-      username: username,
+      ts: ts
     })
-  })).json();
-  logger.debug("Sent message with timestamp ", json_resp.ts, " and channel id ", json_resp.channel);
-  return json_resp;
+  })).json())
+  let success = json["ok"]
+  if (success) logger.debug("Deleted poll in channel ", channel, " with message timestamp ", ts)
+  else logger.error(json, channel, ts)
+  return !!success;
 }
 
 /**
- * Sends emojis to message id in channel
+ * Deletes the originating message
  * 
- * @param {string} channel channel id
- * @param {number} ts timestamp of message
- * @param {number} reactions number of reactions
- * @returns {boolean} success
+ * @param {string} response_url 
  */
-async function sendEmojis(channel, ts, reactions) {
-  let success = true
-  for(let i = 0; i < reactions; i++) {
-    success &= (await (await fetch("https://slack.com/api/reactions.add", {
-      method: "POST",
-      headers: {
-        'Authorization': `Bearer ${config.SLACK_OAUTH_TOKEN}`,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json; charset=utf-8'
-      },
-      body: JSON.stringify({
-        name: emojis[i][1],
-        channel: channel,
-        timestamp: ts
-      })
-    })).json())["ok"]
-  }
-  logger.debug("Sent ", reactions, " emojis to message timestamp ", ts)
-  return success;
+function deleteOriginatingMessage(response_url) {
+  fetch(response_url, {
+    method: "POST",
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8'
+    },
+    body: JSON.stringify({
+      "delete_original": true
+    })
+  });
+  logger.debug("Deleted originating message");
 }
 
 /**
@@ -162,6 +91,31 @@ async function sendEmojis(channel, ts, reactions) {
  */
 function parsePayload(payload) {
   return JSON.parse(payload);
+}
+
+/**
+ * Handles the interactive commands
+ * 
+ * @param {string} channel channel
+ * @param {string} timestamp timestamp
+ * @param {[Action]} actions actions
+ */
+async function handleInteractiveCommands(channel, timestamp, actions) {
+  if (!Array.isArray(actions)) return;
+  for (let i=0; i<actions.length; i++) {
+    await handleButtonActionDeletePoll(actions[i]);
+  }
+}
+
+/**
+ * Handle the button that deletes the poll
+ * 
+ * @param {Button} action action
+ */
+async function handleButtonActionDeletePoll(action) {
+  if (action.type !== "button" || action.action_id !== "deletePoll") return;
+  let pair = action.value.split(',');
+  await deletePoll(pair[0], pair[1]);
 }
 
 /**
@@ -188,13 +142,14 @@ exports.interactive = async function(req, res) {
     verifyWebhook(slackRequest);
 
     // interpret interactive request
-
+    await handleInteractiveCommands(slackRequest.channel, slackRequest.container.message_ts, slackRequest.actions);
+    deleteOriginatingMessage(slackRequest.response_url);
 
     // success!
-    res.json({ text: "Successfully made the poll!" });
+    res.json({ text: "Successfully deleted the poll!" });
   }
   catch (err) {
-    logger.error(JSON.stringify(err));
+    logger.error(err);
     res.status(err.status || 500).json(err);
   }
 }

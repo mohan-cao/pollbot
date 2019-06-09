@@ -154,6 +154,60 @@ async function sendEmojis(channel, ts, reactions) {
 }
 
 /**
+ * Makes and returns a response
+ * 
+ * @param {string} channel channel of poll msg
+ * @param {string} ts timestamp of poll msg
+ */
+function makeResponse(channel, ts) {
+  return {
+    text: "Successfully made the poll!",
+    blocks: [
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": `Successfully made the poll!`
+        }
+      },
+      {
+        "type": "actions",
+        "elements": [{
+          "type": "button",
+          "text": {
+            "type": "plain_text",
+            "text": `Delete the poll?`,
+            "emoji": true
+          },
+          "style": "danger",
+          "action_id": "deletePoll",
+          "value": channel + ',' + ts,
+          "confirm": {
+            "title": {
+              "type": "plain_text",
+               "text": "Are you sure?"
+            },
+            "text": {
+               "type": "mrkdwn",
+               "text": "You can't change your mind."
+            },
+            "confirm": {
+                "type": "plain_text",
+                "text": "Do it"
+            },
+            "deny": {
+                "type": "plain_text",
+                "text": "Stop!"
+            }
+          }
+        }]
+      }
+    ],
+    response_type: "ephemeral"
+  };
+}
+
+/**
  * Receive a Slash Command request from Slack.
  *
  * Trigger this function by making a POST request with a payload to:
@@ -186,8 +240,9 @@ exports.pollbot = async function(req, res) {
     const x = await sendMessage(req.body.channel_id, req.body.user_name, pollText);
     sendEmojis(x.channel, x.ts, options.length);
 
+    const response = makeResponse(x.channel, x.ts);
     // Send response
-    res.json({ text: "Successfully made the poll!" });
+    res.json(response);
   }
   catch (err) {
     logger.error(JSON.stringify(err));
